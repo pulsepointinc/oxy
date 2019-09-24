@@ -121,6 +121,69 @@ func TestStickCookieWithOptions(t *testing.T) {
 	assert.True(t, cookie.HttpOnly)
 }
 
+func TestStickCookieWithChromeSameSite(t *testing.T) {
+	a := testutils.NewResponder("a")
+	b := testutils.NewResponder("b")
+
+	defer a.Close()
+	defer b.Close()
+
+	fwd, err := forward.New()
+	require.NoError(t, err)
+
+	options := CookieOptions{ChromeSameSite: true}
+	sticky := NewStickySessionWithOptions("test", options)
+	require.NotNil(t, sticky)
+
+	lb, err := New(fwd, EnableStickySession(sticky))
+	require.NoError(t, err)
+
+	err = lb.UpsertServer(testutils.ParseURI(a.URL))
+	require.NoError(t, err)
+	err = lb.UpsertServer(testutils.ParseURI(b.URL))
+	require.NoError(t, err)
+
+	proxy := httptest.NewServer(lb)
+	defer proxy.Close()
+
+	resp, err := http.Get(proxy.URL)
+	require.NoError(t, err)
+
+	cookie := resp.Cookies()[0]
+	assert.Equal(t, "test", cookie.Name)
+	assert.Equal(t, a.URL, cookie.Value)
+	assert.False(t, cookie.Secure)
+	assert.False(t, cookie.HttpOnly)
+	// assert samesite is not set
+	assert.Equal(t, http.SameSite(0), cookie.SameSite)
+
+	//lets try again with a chrome 78 user agent (and no stickiness cookie)
+	req, _ := http.NewRequest(http.MethodGet, proxy.URL, nil)
+	req.Header.Set("User-Agent", "Chrome/78.0")
+	resp, err = http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	cookie = resp.Cookies()[0]
+	assert.Equal(t, "test", cookie.Name)
+	assert.Equal(t, b.URL, cookie.Value)
+	// assert that secure got overriden
+	assert.True(t, cookie.Secure)
+	assert.False(t, cookie.HttpOnly)
+	// assert samesite got set to none
+	assert.Equal(t, http.SameSiteNoneMode, cookie.SameSite)
+
+	//try with nil user agent header
+	req, _ = http.NewRequest(http.MethodGet, proxy.URL, nil)
+	req.Header.Set("User-Agent", "")
+	resp, err = http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	cookie = resp.Cookies()[0]
+	assert.Equal(t, "test", cookie.Name)
+	assert.Equal(t, a.URL, cookie.Value)
+	assert.False(t, cookie.Secure)
+	assert.False(t, cookie.HttpOnly)
+	assert.Equal(t, http.SameSite(0), cookie.SameSite)
+}
+
 func TestRemoveRespondingServer(t *testing.T) {
 	a := testutils.NewResponder("a")
 	b := testutils.NewResponder("b")

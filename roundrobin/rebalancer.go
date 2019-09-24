@@ -202,7 +202,7 @@ func (rb *Rebalancer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 
 		if rb.stickySession != nil {
-			rb.stickySession.StickBackend(fwdURL, &w)
+			rb.stickySession.StickBackend(fwdURL, req, &w)
 		}
 
 		newReq.URL = fwdURL

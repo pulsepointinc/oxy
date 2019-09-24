@@ -129,7 +129,7 @@ func (r *RoundRobin) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 
 		if r.stickySession != nil {
-			r.stickySession.StickBackend(url, &w)
+			r.stickySession.StickBackend(url, req, &w)
 		}
 		newReq.URL = url
 	}

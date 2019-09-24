@@ -13,8 +13,9 @@ type StickySession struct {
 
 // CookieOptions has all the options one would like to set on the affinity cookie
 type CookieOptions struct {
-	HTTPOnly bool
-	Secure   bool
+	HTTPOnly       bool
+	Secure         bool
+	ChromeSameSite bool
 }
 
 // NewStickySession creates a new StickySession
@@ -51,10 +52,16 @@ func (s *StickySession) GetBackend(req *http.Request, servers []*url.URL) (*url.
 }
 
 // StickBackend creates and sets the cookie
-func (s *StickySession) StickBackend(backend *url.URL, w *http.ResponseWriter) {
+func (s *StickySession) StickBackend(backend *url.URL, req *http.Request, w *http.ResponseWriter) {
 	opt := s.options
-	cookie := &http.Cookie{Name: s.cookieName, Value: backend.String(), Path: "/", HttpOnly: opt.HTTPOnly, Secure: opt.Secure}
-	http.SetCookie(*w, cookie)
+	//if chrome rewriting is enabled and user agent is chrome, set SameSite = True, Secure = True if browser is chrome
+	if opt.ChromeSameSite && IsUANewChrome(req.Header.Get("User-Agent")) {
+		cookie := &http.Cookie{Name: s.cookieName, Value: backend.String(), Path: "/", HttpOnly: opt.HTTPOnly, Secure: true, SameSite: http.SameSiteNoneMode}
+		http.SetCookie(*w, cookie)
+	} else {
+		cookie := &http.Cookie{Name: s.cookieName, Value: backend.String(), Path: "/", HttpOnly: opt.HTTPOnly, Secure: opt.Secure}
+		http.SetCookie(*w, cookie)
+	}
 }
 
 func (s *StickySession) isBackendAlive(needle *url.URL, haystack []*url.URL) bool {
